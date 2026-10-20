@@ -1,0 +1,87 @@
+// Quotex 15-Second Candle Manipulator (Client-Side Glitch)
+(function() {
+    let isGlitchActive = false;
+    let glitchDirection = null; // 'UP' or 'DOWN'
+    let glitchTimer = null;
+
+    // WebSocket হুকিং: সার্ভার থেকে আসা রিয়েল-টাইম প্রাইস ডেটা ইন্টারসেপ্ট করা
+    const originalSet = Object.getOwnPropertyDescriptor(WebSocket.prototype, 'onmessage').set;
+
+    Object.defineProperty(WebSocket.prototype, 'onmessage', {
+        set: function(callback) {
+            return originalSet.call(this, function(event) {
+                if (isGlitchActive && event.data) {
+                    try {
+                        let data = JSON.parse(event.data);
+                        
+                        // Quotex-এর প্রাইস ডেটা অ্যারে বা অবজেক্ট ম্যানিপুলেশন 
+                        // (প্ল্যাটফর্মের ডেটা স্ট্রাকচারের ওপর ভিত্তি করে কাস্টমাইজেশন প্রয়োজন হতে পারে)
+                        if (data.price !== undefined) {
+                            if (glitchDirection === 'UP') {
+                                data.price += 0.0050; // ক্যান্ডেল উপরে পুশ করা
+                            } else if (glitchDirection === 'DOWN') {
+                                data.price -= 0.0050; // ক্যান্ডেল নিচে পুশ করা
+                            }
+                            // মডিফাই করা ডেটা চার্টে পাঠানো
+                            event = new MessageEvent('message', { data: JSON.stringify(data) });
+                        }
+                    } catch (e) {
+                        // JSON ডেটা না হলে ইগনোর করা হবে
+                    }
+                }
+                return callback.call(this, event);
+            });
+        }
+    });
+
+    // স্ক্রিনে কন্ট্রোল প্যানেল তৈরি করা
+    const controlPanel = document.createElement('div');
+    controlPanel.style.position = 'fixed';
+    controlPanel.style.top = '20px';
+    controlPanel.style.right = '20px';
+    controlPanel.style.zIndex = '999999';
+    controlPanel.style.background = 'rgba(0, 0, 0, 0.8)';
+    controlPanel.style.padding = '15px';
+    controlPanel.style.borderRadius = '8px';
+    controlPanel.style.color = '#fff';
+    controlPanel.style.fontFamily = 'Arial, sans-serif';
+
+    const btnUp = document.createElement('button');
+    btnUp.innerText = 'Force UP (15s)';
+    btnUp.style.background = '#4CAF50';
+    btnUp.style.color = 'white';
+    btnUp.style.padding = '10px';
+    btnUp.style.marginRight = '10px';
+    btnUp.style.border = 'none';
+    btnUp.style.cursor = 'pointer';
+    btnUp.onclick = () => activateGlitch('UP');
+
+    const btnDown = document.createElement('button');
+    btnDown.innerText = 'Force DOWN (15s)';
+    btnDown.style.background = '#f44336';
+    btnDown.style.color = 'white';
+    btnDown.style.padding = '10px';
+    btnDown.style.border = 'none';
+    btnDown.style.cursor = 'pointer';
+    btnDown.onclick = () => activateGlitch('DOWN');
+
+    controlPanel.appendChild(btnUp);
+    controlPanel.appendChild(btnDown);
+    document.body.appendChild(controlPanel);
+
+    // গ্লিচ অ্যাক্টিভেশন ফাংশন (১৫ সেকেন্ড টাইমার সহ)
+    function activateGlitch(direction) {
+        if (isGlitchActive) return;
+
+        isGlitchActive = true;
+        glitchDirection = direction;
+        console.log(`[+] Glitch Activated: Candle going ${direction} for 15 seconds.`);
+
+        // ১৫ সেকেন্ড পর গ্লিচ অটোমেটিক বন্ধ হয়ে যাবে
+        glitchTimer = setTimeout(() => {
+            isGlitchActive = false;
+            glitchDirection = null;
+            console.log('[-] Glitch Deactivated. Normal market resumed.');
+        }, 15000); // 15000 milliseconds = 15 seconds
+    }
+})();
